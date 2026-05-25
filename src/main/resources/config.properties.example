@@ -1,0 +1,7 @@
+# 공공데이터포털 (기상청, 천문연 공용 키)
+api.dataportal.key=YOUR_DATAPORTAL_SERVICE_KEY_HERE
+
+# V-World 인증키
+api.vworld.key=YOUR_VWORLD_KEY_HERE
+
+# NOTAM은 인증키 불필요 (세션 기반)

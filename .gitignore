@@ -1,0 +1,14 @@
+target/
+.vscode/
+*.iml
+.idea/
+.classpath
+.project
+.settings/
+
+# 본인 API 키 보호
+src/main/resources/config.properties
+
+# 런타임 생성 데이터
+cache/
+data/
