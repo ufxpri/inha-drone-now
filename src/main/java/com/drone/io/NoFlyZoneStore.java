@@ -23,6 +23,11 @@ public final class NoFlyZoneStore {
         PROHIBITED("비행금지구역", new Color(220, 0, 0), true),
         RESTRICTED("비행제한구역", new Color(230, 140, 0), true),
         CONTROL("관제권", new Color(40, 90, 200), true),
+        DANGER("위험지역", new Color(140, 0, 0), true),
+        TEMP("임시비행금지구역", new Color(220, 40, 120), true),
+        ALERT("경계구역", new Color(150, 60, 180), false),
+        OBSTACLE("장애물공역", new Color(110, 110, 110), false),
+        COORDINATION("사전협의구역", new Color(0, 150, 150), false),
         DRONE_ALLOWED("드론 전용공역", new Color(30, 150, 60), false);
 
         public final String label;
@@ -48,6 +53,11 @@ public final class NoFlyZoneStore {
             new LayerSpec("/geojson/lt_c_aisprhc.geojson", "prh_lbl_1", Category.PROHIBITED),
             new LayerSpec("/geojson/lt_c_aisresc.geojson", "res_lbl_1", Category.RESTRICTED),
             new LayerSpec("/geojson/lt_c_aisctrc.geojson", "ctr_lbl_1", Category.CONTROL),
+            new LayerSpec("/geojson/lt_c_aisdngc.geojson", "dng_lbl_1", Category.DANGER),
+            new LayerSpec("/geojson/lt_c_aistemp.geojson", "prh_lbl_1", Category.TEMP),
+            new LayerSpec("/geojson/lt_c_aisaltc.geojson", "alt_lbl_1", Category.ALERT),
+            new LayerSpec("/geojson/lt_c_aisobls.geojson", "remarks_tx", Category.OBSTACLE),
+            new LayerSpec("/geojson/lt_c_aispca.geojson", "nm_kor", Category.COORDINATION),
             new LayerSpec("/geojson/lt_c_aisdronezone.geojson", "name", Category.DRONE_ALLOWED),
     };
 
