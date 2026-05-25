@@ -3,6 +3,7 @@ package com.drone.view;
 import com.drone.controller.DashboardController;
 import com.drone.controller.SpotController;
 import com.drone.io.AppDataStore;
+import com.drone.io.NoFlyZoneStore;
 import com.drone.model.Location;
 import com.drone.model.PilotLicense;
 
@@ -42,7 +43,8 @@ public class MainFrame extends JFrame {
         setLayout(new BorderLayout());
 
         AppDataStore dataStore = new AppDataStore();
-        DashboardController dashboard = new DashboardController(dataStore);
+        NoFlyZoneStore noFlyZoneStore = new NoFlyZoneStore();
+        DashboardController dashboard = new DashboardController(dataStore, noFlyZoneStore);
         SpotController spotController = new SpotController(dataStore);
 
         // ===== 상단 타이틀 바 =====
@@ -52,6 +54,8 @@ public class MainFrame extends JFrame {
 
         // ===== 각 패널 생성 =====
         MapPanel mapPanel = new MapPanel(dashboard);
+        // 번들 공역 폴리곤을 시작 시 한 번 지도에 표시(클릭 전부터 보이도록)
+        mapPanel.setNoFlyPolygons(noFlyZoneStore.all());
         ChecklistPanel checklistPanel = new ChecklistPanel(verdictBanner);
         WeatherPanel weatherPanel = new WeatherPanel();
         NotamPanel notamPanel = new NotamPanel();

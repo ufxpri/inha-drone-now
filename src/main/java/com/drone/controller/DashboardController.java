@@ -3,10 +3,10 @@ package com.drone.controller;
 import com.drone.ConfigLoader;
 import com.drone.api.NotamClient;
 import com.drone.api.SunTimeClient;
-import com.drone.api.VWorldClient;
 import com.drone.api.WeatherClient;
 import com.drone.io.AppDataStore;
 import com.drone.io.FileCacheStore;
+import com.drone.io.NoFlyZoneStore;
 import com.drone.judge.FlightSafetyJudge;
 import com.drone.judge.FlightSafetyReport;
 import com.drone.model.Location;
@@ -30,7 +30,7 @@ import java.util.function.Consumer;
 public class DashboardController {
     private final WeatherClient weatherClient;
     private final SunTimeClient sunTimeClient;
-    private final VWorldClient vWorldClient;
+    private final NoFlyZoneStore noFlyZoneStore;
     private final NotamClient notamClient;
     private final FlightSafetyJudge judge;
     private final AppDataStore dataStore;
@@ -45,14 +45,13 @@ public class DashboardController {
     /** 지도 클릭 시 마지막 선택 위치를 외부(예: MainFrame)에 알리는 콜백. */
     private Consumer<Location> locationListener;
 
-    public DashboardController(AppDataStore dataStore) {
+    public DashboardController(AppDataStore dataStore, NoFlyZoneStore noFlyZoneStore) {
         this.dataStore = dataStore;
+        this.noFlyZoneStore = noFlyZoneStore;
         FileCacheStore cache = new FileCacheStore();
         String dataKey = ConfigLoader.get("api.dataportal.key");
-        String vworldKey = ConfigLoader.get("api.vworld.key");
         this.weatherClient = new WeatherClient(cache, dataKey);
         this.sunTimeClient = new SunTimeClient(cache, dataKey);
-        this.vWorldClient = new VWorldClient(cache, vworldKey);
         this.notamClient = new NotamClient(cache);
         this.judge = new FlightSafetyJudge();
     }
@@ -80,7 +79,7 @@ public class DashboardController {
             protected FlightSafetyReport doInBackground() {
                 w = safe(() -> weatherClient.get(loc, when), "기상");
                 n = safe(() -> notamClient.get(loc, when), "NOTAM");
-                z = safe(() -> vWorldClient.get(loc, when), "비행금지구역");
+                z = safe(() -> noFlyZoneStore.zonesContaining(loc.lat(), loc.lon()), "비행금지구역");
                 s = safe(() -> sunTimeClient.get(loc, when), "일출일몰");
                 return judge.judge(license, loc, when, w, n, z, s);
             }

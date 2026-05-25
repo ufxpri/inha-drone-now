@@ -1,6 +1,7 @@
 package com.drone.view;
 
 import com.drone.controller.DashboardController;
+import com.drone.io.NoFlyZoneStore;
 import com.drone.model.Location;
 import com.drone.model.dto.NotamInfo;
 import org.jxmapviewer.JXMapViewer;
@@ -18,6 +19,7 @@ import javax.swing.*;
 import java.awt.*;
 import java.awt.event.MouseAdapter;
 import java.awt.event.MouseEvent;
+import java.awt.geom.Path2D;
 import java.awt.geom.Point2D;
 import java.util.ArrayList;
 import java.util.HashSet;
@@ -30,6 +32,7 @@ public class MapPanel extends JPanel {
     private final WaypointPainter<DefaultWaypoint> waypointPainter = new WaypointPainter<>();
     private final Set<DefaultWaypoint> waypoints = new HashSet<>();
     private final NotamCirclePainter notamPainter = new NotamCirclePainter();
+    private final NoFlyPolygonPainter polygonPainter = new NoFlyPolygonPainter();
     private final JLabel statusLabel = new JLabel(" 선택된 위치: (지도를 클릭하세요)");
 
     public MapPanel(DashboardController controller) {
@@ -63,7 +66,8 @@ public class MapPanel extends JPanel {
 
         // 오버레이: NOTAM 원(아래) + 클릭 마커(위)를 함께 그린다.
         waypointPainter.setWaypoints(waypoints);
-        CompoundPainter<JXMapViewer> overlay = new CompoundPainter<>(notamPainter, waypointPainter);
+        // 그리기 순서: 공역 폴리곤(아래) → NOTAM 원 → 클릭 마커(위)
+        CompoundPainter<JXMapViewer> overlay = new CompoundPainter<>(polygonPainter, notamPainter, waypointPainter);
         overlay.setCacheable(false);
         viewer.setOverlayPainter(overlay);
 
@@ -105,6 +109,56 @@ public class MapPanel extends JPanel {
     public void setNotams(List<NotamInfo.NotamItem> items) {
         notamPainter.setItems(items == null ? List.of() : new ArrayList<>(items));
         viewer.repaint();
+    }
+
+    /** 번들 공역 폴리곤을 받아 지도에 표시한다. (EDT에서 호출) */
+    public void setNoFlyPolygons(List<NoFlyZoneStore.ZonePolygon> polys) {
+        polygonPainter.setPolygons(polys == null ? List.of() : new ArrayList<>(polys));
+        viewer.repaint();
+    }
+
+    /** 공역 폴리곤을 분류별 색으로 반투명 채움 + 외곽선으로 그리는 오버레이 페인터. */
+    private static final class NoFlyPolygonPainter implements Painter<JXMapViewer> {
+        private List<NoFlyZoneStore.ZonePolygon> polys = List.of();
+
+        void setPolygons(List<NoFlyZoneStore.ZonePolygon> polys) { this.polys = polys; }
+
+        @Override
+        public void paint(Graphics2D g, JXMapViewer map, int w, int h) {
+            if (polys.isEmpty()) return;
+            g = (Graphics2D) g.create();
+            g.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            Rectangle vp = map.getViewportBounds();
+            int zoom = map.getZoom();
+            g.setStroke(new BasicStroke(1f));
+
+            for (NoFlyZoneStore.ZonePolygon poly : polys) {
+                List<double[]> ring = poly.ring();
+                if (ring.size() < 3) continue;
+                Path2D.Double path = new Path2D.Double();
+                boolean first = true;
+                for (double[] pt : ring) {
+                    Point2D px = map.getTileFactory().geoToPixel(
+                            new GeoPosition(pt[0], pt[1]), zoom);
+                    double sx = px.getX() - vp.getX();
+                    double sy = px.getY() - vp.getY();
+                    if (first) {
+                        path.moveTo(sx, sy);
+                        first = false;
+                    } else {
+                        path.lineTo(sx, sy);
+                    }
+                }
+                path.closePath();
+
+                Color base = poly.category().color;
+                g.setColor(new Color(base.getRed(), base.getGreen(), base.getBlue(), 50));
+                g.fill(path);
+                g.setColor(base);
+                g.draw(path);
+            }
+            g.dispose();
+        }
     }
 
     /** hasGeometry()인 NOTAM을 반투명 원으로 그리는 오버레이 페인터. */
