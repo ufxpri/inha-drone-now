@@ -11,6 +11,11 @@ public class ChecklistPanel extends JPanel {
     private static final Color GREEN = new Color(46, 160, 67);
     private static final Color ORANGE = new Color(232, 142, 0);
     private static final Color RED = new Color(207, 34, 46);
+    private static final Color PENDING = new Color(200, 200, 200);
+
+    /** 로딩 중 미리 보여줄 체크리스트 항목 라벨(판정 메서드와 동일 순서). */
+    private static final String[] LABELS =
+            {"바람", "강수", "NOTAM", "비행금지구역", "주간 비행", "조종 자격"};
 
     private final DefaultListModel<ChecklistItem> model = new DefaultListModel<>();
     private final JList<ChecklistItem> list = new JList<>(model);
@@ -69,8 +74,12 @@ public class ChecklistPanel extends JPanel {
         row.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, new Color(235, 235, 235)),
                 BorderFactory.createEmptyBorder(6, 8, 6, 8)));
-        row.add(new StatusDot(colorFor(value.status())), BorderLayout.WEST);
-        JLabel lbl = new JLabel("<html><b>" + value.label() + "</b> — " + value.status()
+        boolean pending = value.status() == null;
+        row.add(new StatusDot(pending ? PENDING : colorFor(value.status())), BorderLayout.WEST);
+        String head = pending
+                ? "<span style='color:#999'><b>" + value.label() + "</b> — 확인 중…</span>"
+                : "<b>" + value.label() + "</b> — " + value.status();
+        JLabel lbl = new JLabel("<html>" + head
                 + "<br/><span style='color:#666'>" + value.detail() + "</span></html>");
         lbl.setFont(new Font("Malgun Gothic", Font.PLAIN, 12));
         row.add(lbl, BorderLayout.CENTER);
@@ -86,6 +95,33 @@ public class ChecklistPanel extends JPanel {
             verdictBanner.setBackground(Color.LIGHT_GRAY);
             verdictBanner.setForeground(Color.DARK_GRAY);
         }
+    }
+
+    /**
+     * 새 위치 판정 시작 시 호출: 6개 항목을 회색 "확인 중…" 상태로 채워
+     * 데이터가 도착하는 대로 {@link #setItemResult}로 하나씩 활성화한다.
+     */
+    public void showLoading() {
+        model.clear();
+        hint.setText(" ");
+        for (String label : LABELS) {
+            model.addElement(new ChecklistItem(label, null, ""));
+        }
+        verdictBanner.setText("판정 중…");
+        verdictBanner.setBackground(Color.LIGHT_GRAY);
+        verdictBanner.setForeground(Color.DARK_GRAY);
+        verdictBanner.setOpaque(true);
+    }
+
+    /** 로딩 중인 동일 라벨 항목을 실제 판정 결과로 교체(회색→컬러 활성화). */
+    public void setItemResult(ChecklistItem result) {
+        for (int i = 0; i < model.size(); i++) {
+            if (model.get(i).label().equals(result.label())) {
+                model.set(i, result);
+                return;
+            }
+        }
+        model.addElement(result);
     }
 
     public void update(FlightSafetyReport report) {

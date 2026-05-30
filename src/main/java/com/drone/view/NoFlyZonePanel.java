@@ -47,9 +47,10 @@ public class NoFlyZonePanel extends JPanel {
             return;
         }
         if (z.intersects()) {
-            shield.set(ShieldStatus.State.BLOCKED, "✕ 비행금지구역 교차 (" + z.zones().size() + "건)");
+            // 방패 아이콘이 ✕ 마크를 직접 그리므로 텍스트에는 기호를 넣지 않는다.
+            shield.set(ShieldStatus.State.BLOCKED, "비행금지구역 교차 (" + z.zones().size() + "건)");
         } else {
-            shield.set(ShieldStatus.State.OK, "✓ 비행 가능 구역");
+            shield.set(ShieldStatus.State.OK, "비행 가능 구역");
         }
         if (z.zones() != null) z.zones().forEach(model::addElement);
     }

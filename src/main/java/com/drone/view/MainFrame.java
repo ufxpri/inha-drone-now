@@ -57,10 +57,11 @@ public class MainFrame extends JFrame {
         // 번들 공역 폴리곤을 시작 시 한 번 지도에 표시(클릭 전부터 보이도록)
         mapPanel.setNoFlyPolygons(noFlyZoneStore.all());
         ChecklistPanel checklistPanel = new ChecklistPanel(verdictBanner);
-        WeatherPanel weatherPanel = new WeatherPanel();
+        ConditionsPanel conditionsPanel = new ConditionsPanel();
         NotamPanel notamPanel = new NotamPanel();
         NoFlyZonePanel noFlyZonePanel = new NoFlyZonePanel();
-        SunTimePanel sunTimePanel = new SunTimePanel();
+        // NOTAM 종류 필터 결과를 지도 표시(원·라벨)에도 그대로 반영한다.
+        notamPanel.setOnFilterChange(mapPanel::setNotams);
 
         // 지도 클릭 시 현재 위치 저장(관심지점 추가에 사용)
         dashboard.setLocationListener(loc -> this.currentLocation = loc);
@@ -71,11 +72,9 @@ public class MainFrame extends JFrame {
                 loc -> dashboard.onMapClicked(loc));
 
         dashboard.setChecklistPanel(checklistPanel);
-        dashboard.setWeatherPanel(weatherPanel);
+        dashboard.setConditionsPanel(conditionsPanel);
         dashboard.setNotamPanel(notamPanel);
         dashboard.setNoFlyZonePanel(noFlyZonePanel);
-        dashboard.setSunTimePanel(sunTimePanel);
-        dashboard.setMapPanel(mapPanel);
 
         // ===== 좌측 사이드바 (관심지점) =====
         leftSidebar = buildSidebar("관심지점", spotListPanel);
@@ -85,8 +84,8 @@ public class MainFrame extends JFrame {
         rightPanel = buildRightPanel(checklistPanel);
         rightPanel.setPreferredSize(new Dimension(320, 0));
 
-        // ===== 하단 패널 (기상 | 일출일몰 | 비행금지구역 | NOTAM 가로 4열) =====
-        bottomPanel = buildBottomPanel(weatherPanel, sunTimePanel, noFlyZonePanel, notamPanel);
+        // ===== 하단 패널 (기상&일출일몰 | 비행금지구역 | NOTAM 가로 3열) =====
+        bottomPanel = buildBottomPanel(conditionsPanel, noFlyZonePanel, notamPanel);
         bottomPanel.setPreferredSize(new Dimension(0, 240));
 
         // ===== 중앙 영역 split: (사이드바|지도) | 우측 =====
@@ -110,8 +109,13 @@ public class MainFrame extends JFrame {
         // ===== 액티비티 바 =====
         JPanel activityBar = buildActivityBar();
 
+        // ===== 풋터 상태바: 데이터 소스별 연결/캐시 상태 =====
+        StatusBarPanel statusBar = new StatusBarPanel(dashboard.getStatusBus(),
+                "기상청", "강수예보", "일출일몰", "NOTAM", DashboardController.ZONE_KEY);
+
         add(activityBar, BorderLayout.WEST);
         add(verticalSplit, BorderLayout.CENTER);
+        add(statusBar, BorderLayout.SOUTH);
     }
 
     private JPanel buildTopBar(AppDataStore dataStore, JLabel verdictBanner) {
@@ -119,7 +123,7 @@ public class MainFrame extends JFrame {
         top.setBackground(TITLEBAR_BG);
         top.setBorder(BorderFactory.createEmptyBorder(6, 12, 6, 12));
 
-        JLabel title = new JLabel("🛩  드론 지금 당장");
+        JLabel title = new JLabel("드론 지금 당장");
         title.setForeground(TITLEBAR_FG);
         title.setFont(new Font("Malgun Gothic", Font.BOLD, 16));
         top.add(title, BorderLayout.WEST);
@@ -167,8 +171,8 @@ public class MainFrame extends JFrame {
         bar.setPreferredSize(new Dimension(50, 0));
         bar.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.GRAY));
 
-        JToggleButton spotsBtn = makeActivityButton("📍", "관심지점", true);
-        JToggleButton notamBtn = makeActivityButton("🔔", "NOTAM/체크리스트", true);
+        JToggleButton spotsBtn = makeActivityButton("★", "관심지점", true);
+        JToggleButton notamBtn = makeActivityButton("☰", "NOTAM/체크리스트", true);
         JToggleButton settingsBtn = makeActivityButton("⚙", "설정", false);
 
         spotsBtn.addActionListener(e -> {
@@ -200,7 +204,8 @@ public class MainFrame extends JFrame {
         JToggleButton b = new JToggleButton(icon);
         b.setSelected(selected);
         b.setToolTipText(tooltip);
-        b.setFont(new Font("Segoe UI Emoji", Font.PLAIN, 20));
+        // Dialog(논리 폰트)는 ★ ☰ ⚙ 등 기호를 한글과 함께 폴백 렌더링한다(이모지 누락 박스 방지).
+        b.setFont(new Font("Dialog", Font.PLAIN, 18));
         b.setForeground(ACTIVITY_FG);
         b.setBackground(ACTIVITY_BG);
         b.setFocusPainted(false);
@@ -235,10 +240,10 @@ public class MainFrame extends JFrame {
         panel.setBackground(Color.WHITE);
         panel.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, Color.GRAY));
 
-        JLabel header = new JLabel("  ✅  체크리스트");
+        JLabel header = new JLabel("  ✓  체크리스트");
         header.setOpaque(true);
         header.setBackground(new Color(230, 230, 230));
-        header.setFont(new Font("Malgun Gothic", Font.BOLD, 11));
+        header.setFont(new Font("Dialog", Font.BOLD, 12));
         header.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY),
                 BorderFactory.createEmptyBorder(6, 4, 6, 4)));
@@ -247,30 +252,56 @@ public class MainFrame extends JFrame {
         return panel;
     }
 
-    /** 하단 패널: 기상 | 일출일몰 | 비행금지구역 | NOTAM 4열 가로 배치. */
-    private JPanel buildBottomPanel(WeatherPanel weather, SunTimePanel sun,
+    /**
+     * 하단 패널: 치명 3요소(강수확률·풍속풍향·일출일몰)를 비행금지·NOTAM과 같은 최상위 카드로 격상.
+     * 모든 카드는 동일한 회색 헤더 스타일이며, 폭만 가중치로 배분한다(기온은 참고용이라 좁게).
+     */
+    private JPanel buildBottomPanel(ConditionsPanel conditions,
                                     NoFlyZonePanel noFly, NotamPanel notam) {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBorder(BorderFactory.createMatteBorder(1, 0, 0, 0, Color.GRAY));
 
-        JPanel grid = new JPanel(new GridLayout(1, 4, 1, 0));
+        JPanel grid = new JPanel(new GridBagLayout());
         grid.setBackground(Color.GRAY);
-        grid.add(titledColumn("🌤  기상 정보", weather));
-        grid.add(titledColumn("☀  일출/일몰", sun));
-        grid.add(titledColumn("🚫  비행금지구역", noFly));
-        grid.add(titledColumn("🔔  NOTAM", notam));
+        int gx = 0;
+        addColumn(grid, gx++, 3, titledColumn("☂  강수확률", conditions.rainVisual()));
+        addColumn(grid, gx++, 1, titledColumn("➤  풍속·풍향", conditions.windVisual()));
+        addColumn(grid, gx++, 3, titledColumn("☀  일출·일몰", conditions.sunVisual()));
+        addColumn(grid, gx++, 1, titledColumn("℃  기온", conditions.tempVisual()));
+        addColumn(grid, gx++, 3, titledColumn("⛔  비행금지구역", noFly));
+        addColumn(grid, gx, 5, titledColumn("⚑  NOTAM", notam));
+
         panel.add(grid, BorderLayout.CENTER);
         return panel;
     }
 
-    /** 하단 4열 각각에 회색 헤더를 붙인다. */
+    /**
+     * 가중 폭의 하단 카드 한 칸을 grid에 추가한다(칸 사이 1px 회색 거터).
+     * 카드의 선호/최소 폭을 0에 가깝게 눌러, 폭이 오직 weightx 비율로만 결정되게 한다.
+     * (그렇지 않으면 NOTAM 필터바·리스트 같은 내부 요소의 큰 선호 폭이 비율을 망가뜨린다.)
+     */
+    private void addColumn(JPanel grid, int gridx, double weightx, JComponent col) {
+        col.setMinimumSize(new Dimension(0, 0));
+        col.setPreferredSize(new Dimension(10, 10));
+        GridBagConstraints gc = new GridBagConstraints();
+        gc.gridx = gridx;
+        gc.gridy = 0;
+        gc.fill = GridBagConstraints.BOTH;
+        gc.weightx = weightx;
+        gc.weighty = 1.0;
+        gc.insets = new Insets(0, gridx == 0 ? 0 : 1, 0, 0);
+        grid.add(col, gc);
+    }
+
+    /** 하단 카드에 회색 헤더를 붙인다. */
     private JPanel titledColumn(String title, JComponent body) {
         JPanel col = new JPanel(new BorderLayout());
         col.setBackground(Color.WHITE);
         JLabel header = new JLabel("  " + title);
         header.setOpaque(true);
         header.setBackground(new Color(230, 230, 230));
-        header.setFont(new Font("Malgun Gothic", Font.BOLD, 11));
+        // Dialog 폰트로 선두 기호(☂ ➤ ☀ ℃ ⛔ ⚑)를 한글과 함께 안정적으로 렌더링한다.
+        header.setFont(new Font("Dialog", Font.BOLD, 12));
         header.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY),
                 BorderFactory.createEmptyBorder(4, 4, 4, 4)));
