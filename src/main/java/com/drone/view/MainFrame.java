@@ -12,11 +12,11 @@ import java.awt.*;
 
 /**
  * VS Code 풍의 단일 화면 레이아웃:
- *   NORTH: 타이틀 바 (앱 이름 + 자격 콤보 + 판정 배너)
- *   WEST : 액티비티 바(아이콘 토글) + 좌측 사이드바(관심지점)
- *   CENTER: 지도
- *   EAST : 우측 정보 패널 스택(기상/일출일몰/비행금지구역)  -- Collapsible 섹션
- *   SOUTH: 하단 패널(체크리스트 + NOTAM 가로 분할)
+ *   NORTH : 타이틀 바 (앱 이름 + 자격 콤보 + 판정 배너)
+ *   WEST  : 액티비티 바(아이콘 토글)
+ *   CENTER: (좌)관심지점 사이드바 | 지도 | (우)체크리스트  위에  하단 카드(강수·풍속·일출·기온·금지구역·NOTAM)
+ *   SOUTH : 데이터 소스 상태바(풋터)
+ * 좌/중/우와 상/하는 모두 JSplitPane으로 크기 조절 가능.
  */
 public class MainFrame extends JFrame {
 
@@ -219,16 +219,24 @@ public class MainFrame extends JFrame {
         return b;
     }
 
-    private JPanel buildSidebar(String title, JComponent body) {
-        JPanel p = new JPanel(new BorderLayout());
-        JLabel header = new JLabel("  " + title.toUpperCase());
+    /**
+     * 패널 상단에 붙는 회색 섹션 헤더 라벨(좌측 여백 + 하단 1px 구분선).
+     * 사이드바·체크리스트·하단 카드가 모두 이 한 가지 스타일을 공유한다.
+     */
+    private JLabel sectionHeader(String text, Font font, int padV) {
+        JLabel header = new JLabel("  " + text);
         header.setOpaque(true);
         header.setBackground(new Color(230, 230, 230));
-        header.setFont(new Font("Malgun Gothic", Font.BOLD, 11));
+        header.setFont(font);
         header.setBorder(BorderFactory.createCompoundBorder(
                 BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY),
-                BorderFactory.createEmptyBorder(6, 4, 6, 4)));
-        p.add(header, BorderLayout.NORTH);
+                BorderFactory.createEmptyBorder(padV, 4, padV, 4)));
+        return header;
+    }
+
+    private JPanel buildSidebar(String title, JComponent body) {
+        JPanel p = new JPanel(new BorderLayout());
+        p.add(sectionHeader(title.toUpperCase(), new Font("Malgun Gothic", Font.BOLD, 11), 6), BorderLayout.NORTH);
         p.add(body, BorderLayout.CENTER);
         p.setBorder(BorderFactory.createMatteBorder(0, 0, 0, 1, Color.GRAY));
         return p;
@@ -239,15 +247,7 @@ public class MainFrame extends JFrame {
         JPanel panel = new JPanel(new BorderLayout());
         panel.setBackground(Color.WHITE);
         panel.setBorder(BorderFactory.createMatteBorder(0, 1, 0, 0, Color.GRAY));
-
-        JLabel header = new JLabel("  ✓  체크리스트");
-        header.setOpaque(true);
-        header.setBackground(new Color(230, 230, 230));
-        header.setFont(new Font("Dialog", Font.BOLD, 12));
-        header.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY),
-                BorderFactory.createEmptyBorder(6, 4, 6, 4)));
-        panel.add(header, BorderLayout.NORTH);
+        panel.add(sectionHeader("✓  체크리스트", new Font("Dialog", Font.BOLD, 12), 6), BorderLayout.NORTH);
         panel.add(checklist, BorderLayout.CENTER);
         return panel;
     }
@@ -293,19 +293,11 @@ public class MainFrame extends JFrame {
         grid.add(col, gc);
     }
 
-    /** 하단 카드에 회색 헤더를 붙인다. */
+    /** 하단 카드에 회색 헤더를 붙인다. (Dialog 폰트로 선두 기호 ☂ ➤ ☀ ℃ ⛔ ⚑ 를 안정적으로 렌더링) */
     private JPanel titledColumn(String title, JComponent body) {
         JPanel col = new JPanel(new BorderLayout());
         col.setBackground(Color.WHITE);
-        JLabel header = new JLabel("  " + title);
-        header.setOpaque(true);
-        header.setBackground(new Color(230, 230, 230));
-        // Dialog 폰트로 선두 기호(☂ ➤ ☀ ℃ ⛔ ⚑)를 한글과 함께 안정적으로 렌더링한다.
-        header.setFont(new Font("Dialog", Font.BOLD, 12));
-        header.setBorder(BorderFactory.createCompoundBorder(
-                BorderFactory.createMatteBorder(0, 0, 1, 0, Color.GRAY),
-                BorderFactory.createEmptyBorder(4, 4, 4, 4)));
-        col.add(header, BorderLayout.NORTH);
+        col.add(sectionHeader(title, new Font("Dialog", Font.BOLD, 12), 4), BorderLayout.NORTH);
         col.add(body, BorderLayout.CENTER);
         return col;
     }

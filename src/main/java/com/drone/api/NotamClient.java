@@ -139,33 +139,36 @@ public class NotamClient extends CachedApiClient<NotamInfo> {
 
         Matcher q = Q_GEOM.matcher(fullText);
         if (q.find()) {
-            int latDeg = Integer.parseInt(q.group(1).substring(0, 2));
-            int latMin = Integer.parseInt(q.group(1).substring(2, 4));
-            lat = (latDeg + latMin / 60.0) * (q.group(2).equals("N") ? 1 : -1);
-            int lonDeg = Integer.parseInt(q.group(3).substring(0, 3));
-            int lonMin = Integer.parseInt(q.group(3).substring(3, 5));
-            lon = (lonDeg + lonMin / 60.0) * (q.group(4).equals("E") ? 1 : -1);
+            lat = dms(q.group(1), 2, q.group(2).equals("N"));   // DDMM
+            lon = dms(q.group(3), 3, q.group(4).equals("E"));   // DDDMM
             int r = Integer.parseInt(q.group(5));
-            radiusNm = (r == 999) ? null : (double) r;  // 999 = FIR 전역 → 원 미표시
+            radiusNm = (r == 999) ? null : (double) r;          // 999 = FIR 전역 → 원 미표시
         }
 
         Matcher e = E_GEOM.matcher(fullText);
         if (e.find()) {
             radiusNm = (double) Integer.parseInt(e.group(1));
-            String latS = e.group(2); // DDMMSS
-            int latDeg = Integer.parseInt(latS.substring(0, 2));
-            int latMin = Integer.parseInt(latS.substring(2, 4));
-            int latSec = Integer.parseInt(latS.substring(4, 6));
-            lat = (latDeg + latMin / 60.0 + latSec / 3600.0) * (e.group(3).equals("N") ? 1 : -1);
-            String lonS = e.group(4); // DDDMMSS
-            int lonDeg = Integer.parseInt(lonS.substring(0, 3));
-            int lonMin = Integer.parseInt(lonS.substring(3, 5));
-            int lonSec = Integer.parseInt(lonS.substring(5, 7));
-            lon = (lonDeg + lonMin / 60.0 + lonSec / 3600.0) * (e.group(5).equals("E") ? 1 : -1);
+            lat = dms(e.group(2), 2, e.group(3).equals("N"));   // DDMMSS
+            lon = dms(e.group(4), 3, e.group(5).equals("E"));   // DDDMMSS
         }
 
         if (lat == null || lon == null) return Geometry.NONE;
         return new Geometry(lat, lon, radiusNm);
+    }
+
+    /**
+     * "도분(초)" 좌표 문자열을 10진수 도(degree)로 변환한다.
+     * @param s        숫자 문자열 (예: 위도 "3804"/"380412", 경도 "12724"/"1272407")
+     * @param degDigits 도(度) 자릿수 — 위도 2, 경도 3. 그 뒤로 분 2자리, (있으면) 초 2자리.
+     * @param positive  N/E면 true(+), S/W면 false(−).
+     */
+    private static double dms(String s, int degDigits, boolean positive) {
+        int deg = Integer.parseInt(s.substring(0, degDigits));
+        int min = Integer.parseInt(s.substring(degDigits, degDigits + 2));
+        int sec = s.length() >= degDigits + 4
+                ? Integer.parseInt(s.substring(degDigits + 2, degDigits + 4)) : 0;
+        double value = deg + min / 60.0 + sec / 3600.0;
+        return positive ? value : -value;
     }
 
     private static LocalDateTime parseNotamDate(String raw, DateTimeFormatter fmt) {

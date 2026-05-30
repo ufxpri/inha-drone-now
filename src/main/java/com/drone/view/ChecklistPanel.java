@@ -20,37 +20,14 @@ public class ChecklistPanel extends JPanel {
     private final DefaultListModel<ChecklistItem> model = new DefaultListModel<>();
     private final JList<ChecklistItem> list = new JList<>(model);
     private final JLabel verdictBanner;
-    private final boolean ownsBanner;
     private final JLabel hint = new JLabel("지도를 클릭하면 비행 안전 판정을 표시합니다.", SwingConstants.CENTER);
 
-    /** 기본 생성자: 내부에 자체 verdict 배너를 표시. */
-    public ChecklistPanel() {
-        this(null);
-    }
-
-    /**
-     * 외부에서 전달된 verdict 라벨을 사용하는 생성자(상단 타이틀바에 배치할 때 사용).
-     * externalVerdictLabel 이 null 이면 내부 배너를 표시.
-     */
-    public ChecklistPanel(JLabel externalVerdictLabel) {
+    /** 판정 결과를 표시할 외부 배너(상단 타이틀바의 라벨)를 받아 사용한다. */
+    public ChecklistPanel(JLabel verdictBanner) {
+        this.verdictBanner = verdictBanner;
         setLayout(new BorderLayout(8, 8));
         setBackground(Color.WHITE);
         setBorder(BorderFactory.createEmptyBorder(8, 8, 8, 8));
-
-        if (externalVerdictLabel == null) {
-            verdictBanner = new JLabel(" ", SwingConstants.CENTER);
-            verdictBanner.setFont(new Font("Malgun Gothic", Font.BOLD, 24));
-            verdictBanner.setOpaque(true);
-            verdictBanner.setPreferredSize(new Dimension(0, 60));
-            verdictBanner.setBackground(Color.LIGHT_GRAY);
-            verdictBanner.setForeground(Color.DARK_GRAY);
-            verdictBanner.setText("판정 대기");
-            ownsBanner = true;
-            add(verdictBanner, BorderLayout.NORTH);
-        } else {
-            verdictBanner = externalVerdictLabel;
-            ownsBanner = false;
-        }
 
         hint.setFont(new Font("Malgun Gothic", Font.PLAIN, 12));
         hint.setForeground(Color.GRAY);
@@ -90,11 +67,6 @@ public class ChecklistPanel extends JPanel {
         model.clear();
         hint.setText("지도를 클릭하면 비행 안전 판정을 표시합니다.");
         hint.setForeground(Color.GRAY);
-        if (ownsBanner) {
-            verdictBanner.setText("판정 대기");
-            verdictBanner.setBackground(Color.LIGHT_GRAY);
-            verdictBanner.setForeground(Color.DARK_GRAY);
-        }
     }
 
     /**
@@ -144,11 +116,7 @@ public class ChecklistPanel extends JPanel {
         });
         verdictBanner.setBackground(colorFor(v));
         verdictBanner.setForeground(Color.WHITE);
-        if (!ownsBanner) verdictBanner.setOpaque(true);
-    }
-
-    public void showError() {
-        this.update((FlightSafetyReport) null);
+        verdictBanner.setOpaque(true);
     }
 
     private static Color colorFor(Verdict v) {

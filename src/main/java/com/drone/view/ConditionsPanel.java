@@ -83,28 +83,47 @@ public class ConditionsPanel {
         if (s == null) timeline.setError(); else timeline.set(s.sunrise(), s.sunset());
     }
 
-    // ===== 강수확률 시계열 막대 =====
-    static class PopChart extends JComponent {
-        private List<RainForecastInfo.Hourly> data;
-        private boolean error = false;
-        PopChart() { setPreferredSize(new Dimension(200, 120)); }
-        void setData(List<RainForecastInfo.Hourly> d) { this.data = d; this.error = false; repaint(); }
-        void setError() { this.data = null; this.error = true; repaint(); }
+    /**
+     * 5개 시각화의 공통 부모. 매번 반복되던 Graphics2D 준비/정리(안티에일리어싱·dispose)와
+     * 에러 플래그 처리를 여기서 한 번만 맡는다. 자식은 {@link #paint2D}에서 그리기에만 집중한다.
+     */
+    abstract static class Chart extends JComponent {
+        boolean error = false;
+        Chart(int w, int h) { setPreferredSize(new Dimension(w, h)); }
+        /** 에러 표시로 전환(값은 비운다). */
+        void setError() { error = true; clearData(); repaint(); }
+        /** 값을 비운다(에러/플레이스홀더 시). */
+        abstract void clearData();
+        /** 준비된 Graphics2D에 실제로 그린다(create/dispose는 부모가 처리). */
+        abstract void paint2D(Graphics2D g2);
 
-        @Override protected void paintComponent(Graphics g) {
+        @Override protected final void paintComponent(Graphics g) {
             Graphics2D g2 = (Graphics2D) g.create();
             g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+            paint2D(g2);
+            g2.dispose();
+        }
+    }
+
+    // ===== 강수확률 시계열 막대 =====
+    static class PopChart extends Chart {
+        private List<RainForecastInfo.Hourly> data;
+        PopChart() { super(200, 120); }
+        void setData(List<RainForecastInfo.Hourly> d) { this.data = d; this.error = false; repaint(); }
+        @Override void clearData() { data = null; }
+
+        @Override void paint2D(Graphics2D g2) {
             int w = getWidth(), h = getHeight();
             g2.setFont(VALUE_FONT);
             if (error) {
                 g2.setColor(CRITICAL);
                 g2.drawString("예보 불러오기 실패", 2, h / 2);
-                g2.dispose(); return;
+                return;
             }
             if (data == null || data.isEmpty()) {
                 g2.setColor(Color.GRAY);
                 g2.drawString("—  (지도를 클릭하세요)", 2, h / 2);
-                g2.dispose(); return;
+                return;
             }
             // 상단 요약: 최대 강수확률과 시각
             int maxPop = 0, maxHour = -1;
@@ -150,21 +169,17 @@ public class ConditionsPanel {
             }
             g2.setColor(new Color(215, 215, 215));
             g2.drawLine(0, axisY, w, axisY);
-            g2.dispose();
         }
     }
 
     // ===== 풍속 게이지 (막대 위 + 값 아래, 좁은 카드용) =====
-    static class WindGauge extends JComponent {
+    static class WindGauge extends Chart {
         private double value = Double.NaN;
-        private boolean error = false;
-        WindGauge() { setPreferredSize(new Dimension(120, 34)); }
+        WindGauge() { super(120, 34); }
         void setValue(double v) { this.value = v; this.error = false; repaint(); }
-        void setError() { this.value = Double.NaN; this.error = true; repaint(); }
+        @Override void clearData() { value = Double.NaN; }
 
-        @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        @Override void paint2D(Graphics2D g2) {
             int w = getWidth();
             int barH = 12, barY = 2;
             g2.setColor(new Color(225, 225, 225));
@@ -175,12 +190,12 @@ public class ConditionsPanel {
                 g2.setColor(CRITICAL);
                 String t = "실패";
                 g2.drawString(t, (w - g2.getFontMetrics().stringWidth(t)) / 2, textY);
-                g2.dispose(); return;
+                return;
             }
             if (Double.isNaN(value)) {
                 g2.setColor(Color.GRAY);
                 g2.drawString("—", (w - g2.getFontMetrics().stringWidth("—")) / 2, textY);
-                g2.dispose(); return;
+                return;
             }
             double frac = Math.max(0, Math.min(1, value / 15.0));
             Color c = value < 8 ? new Color(46, 160, 67)
@@ -191,21 +206,17 @@ public class ConditionsPanel {
             g2.setColor(c);
             String t = String.format("%.1f m/s", value);
             g2.drawString(t, (w - g2.getFontMetrics().stringWidth(t)) / 2, textY);
-            g2.dispose();
         }
     }
 
     // ===== 풍향 나침반 =====
-    static class Compass extends JComponent {
+    static class Compass extends Chart {
         private double deg = Double.NaN;
-        private boolean error = false;
-        Compass() { setPreferredSize(new Dimension(120, 80)); }
+        Compass() { super(120, 80); }
         void setDegrees(double d) { this.deg = d; this.error = false; repaint(); }
-        void setError() { this.deg = Double.NaN; this.error = true; repaint(); }
+        @Override void clearData() { deg = Double.NaN; }
 
-        @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        @Override void paint2D(Graphics2D g2) {
             int w = getWidth(), h = getHeight();
             int d = Math.max(28, Math.min(Math.min(w - 6, h - 22), 72));
             int cx = w / 2, cy = h / 2 - 2;
@@ -222,12 +233,12 @@ public class ConditionsPanel {
                 g2.setColor(CRITICAL);
                 String t = "실패";
                 g2.drawString(t, cx - g2.getFontMetrics().stringWidth(t) / 2, cy + r + 15);
-                g2.dispose(); return;
+                return;
             }
             if (Double.isNaN(deg)) {
                 g2.setColor(Color.GRAY);
                 g2.drawString("—", cx - 3, cy + r + 15);
-                g2.dispose(); return;
+                return;
             }
             double rad = Math.toRadians(deg);
             int ex = cx + (int) (Math.sin(rad) * (r - 5));
@@ -239,23 +250,19 @@ public class ConditionsPanel {
             g2.setColor(Color.DARK_GRAY);
             String txt = String.format("%.0f°", deg);
             g2.drawString(txt, cx - g2.getFontMetrics().stringWidth(txt) / 2, cy + r + 15);
-            g2.dispose();
         }
     }
 
     // ===== 기온 (세로 온도계 바, 좁은 카드용) =====
-    static class TempLabel extends JComponent {
+    static class TempLabel extends Chart {
         // 매핑 범위 -10 ~ 40 ℃
         private static final double MIN = -10, MAX = 40;
         private double value = Double.NaN;
-        private boolean error = false;
-        TempLabel() { setPreferredSize(new Dimension(70, 120)); }
+        TempLabel() { super(70, 120); }
         void setValue(double v) { this.value = v; this.error = false; repaint(); }
-        void setError() { this.value = Double.NaN; this.error = true; repaint(); }
+        @Override void clearData() { value = Double.NaN; }
 
-        @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        @Override void paint2D(Graphics2D g2) {
             int w = getWidth(), h = getHeight();
             g2.setFont(new Font("Malgun Gothic", Font.BOLD, 12));
 
@@ -263,7 +270,7 @@ public class ConditionsPanel {
                 g2.setColor(error ? CRITICAL : Color.GRAY);
                 String t = error ? "실패" : "—";
                 g2.drawString(t, (w - g2.getFontMetrics().stringWidth(t)) / 2, h / 2);
-                g2.dispose(); return;
+                return;
             }
 
             int numH = 18;                  // 하단 값 영역
@@ -292,30 +299,26 @@ public class ConditionsPanel {
             String t = String.format("%.1f°C", value);
             g2.setColor(c);
             g2.drawString(t, (w - g2.getFontMetrics().stringWidth(t)) / 2, h - 4);
-            g2.dispose();
         }
     }
 
     // ===== 일출/일몰 타임라인 =====
-    static class DayTimeline extends JComponent {
+    static class DayTimeline extends Chart {
         private static final DateTimeFormatter HM = DateTimeFormatter.ofPattern("HH:mm");
         private LocalTime sunrise, sunset;
-        private boolean error = false;
-        DayTimeline() { setPreferredSize(new Dimension(200, 80)); }
+        DayTimeline() { super(200, 80); }
         void set(LocalTime sr, LocalTime ss) { this.sunrise = sr; this.sunset = ss; this.error = false; repaint(); }
-        void setError() { this.sunrise = null; this.sunset = null; this.error = true; repaint(); }
+        @Override void clearData() { sunrise = null; sunset = null; }
 
         private static double frac(LocalTime t) { return t.toSecondOfDay() / 86400.0; }
 
-        @Override protected void paintComponent(Graphics g) {
-            Graphics2D g2 = (Graphics2D) g.create();
-            g2.setRenderingHint(RenderingHints.KEY_ANTIALIASING, RenderingHints.VALUE_ANTIALIAS_ON);
+        @Override void paint2D(Graphics2D g2) {
             int w = getWidth(), h = getHeight();
             g2.setFont(VALUE_FONT);
             if (error) {
                 g2.setColor(CRITICAL);
                 g2.drawString("불러오기 실패", 2, h / 2);
-                g2.dispose(); return;
+                return;
             }
             int barH = 18;
             int barY = Math.max(22, h / 2 - barH / 2);
@@ -365,7 +368,6 @@ public class ConditionsPanel {
             g2.setStroke(new BasicStroke(2f));
             g2.drawLine(nx, barY - 4, nx, barY + barH + 3);
             g2.fillPolygon(new int[]{nx - 4, nx + 4, nx}, new int[]{barY - 8, barY - 8, barY - 2}, 3);
-            g2.dispose();
         }
     }
 }
