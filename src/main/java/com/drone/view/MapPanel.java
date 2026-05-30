@@ -3,6 +3,7 @@ package com.drone.view;
 import com.drone.controller.DashboardController;
 import com.drone.io.NoFlyZoneStore;
 import com.drone.model.Location;
+import com.drone.model.NotamCategory;
 import com.drone.model.dto.NotamInfo;
 import org.jxmapviewer.JXMapViewer;
 import org.jxmapviewer.input.PanMouseInputListener;
@@ -179,6 +180,7 @@ public class MapPanel extends JPanel {
                 if (!it.hasGeometry()) continue;
                 double cLat = it.centerLat(), cLon = it.centerLon();
                 double radiusKm = it.radiusNm() * 1.852;
+                NotamCategory cat = it.category();
 
                 // 중심을 화면 픽셀로 변환 (geoToPixel은 절대 월드 좌표 → 뷰포트 오프셋 차감)
                 Point2D cPx = map.getTileFactory().geoToPixel(new GeoPosition(cLat, cLon), zoom);
@@ -191,15 +193,43 @@ public class MapPanel extends JPanel {
                 int pr = (int) Math.abs(nPx.getY() - cPx.getY());
                 if (pr < 2) pr = 2;
 
-                Color fill = it.prohibited() ? new Color(255, 0, 0, 60) : new Color(255, 150, 0, 40);
-                Color line = it.prohibited() ? new Color(200, 0, 0) : new Color(220, 120, 0);
-                g.setColor(fill);
+                Color base = cat.color;
+                g.setColor(new Color(base.getRed(), base.getGreen(), base.getBlue(), it.prohibited() ? 60 : 40));
                 g.fillOval(cx - pr, cy - pr, pr * 2, pr * 2);
-                g.setColor(line);
+                g.setColor(base);
                 g.setStroke(new BasicStroke(it.prohibited() ? 2f : 1f));
                 g.drawOval(cx - pr, cy - pr, pr * 2, pr * 2);
+
+                drawCenterLabel(g, cx, cy, labelOf(it, cat), base);
             }
             g.dispose();
         }
+
+        /** 라벨 텍스트: "종류 + 지역코드"로 간략히. (예: "금지 RKSS") */
+        private static String labelOf(NotamInfo.NotamItem it, NotamCategory cat) {
+            String area = it.area() == null ? "" : it.area();
+            int paren = area.indexOf('(');
+            String loc = (paren > 0 ? area.substring(0, paren) : area).trim();
+            return loc.isEmpty() ? cat.shortLabel : cat.shortLabel + " " + loc;
+        }
+
+        /** 원 중심에 흰 배경 알약 형태의 짧은 라벨을 그린다. */
+        private static void drawCenterLabel(Graphics2D g, int cx, int cy, String text, Color color) {
+            g.setFont(LABEL_FONT);
+            FontMetrics fm = g.getFontMetrics();
+            int tw = fm.stringWidth(text);
+            int th = fm.getAscent();
+            int padX = 4, padY = 2;
+            int bw = tw + padX * 2, bh = th + padY * 2;
+            int bx = cx - bw / 2, by = cy - bh / 2;
+            g.setColor(new Color(255, 255, 255, 220));
+            g.fillRoundRect(bx, by, bw, bh, 8, 8);
+            g.setColor(color);
+            g.setStroke(new BasicStroke(1f));
+            g.drawRoundRect(bx, by, bw, bh, 8, 8);
+            g.drawString(text, bx + padX, by + padY + th - 1);
+        }
     }
+
+    private static final Font LABEL_FONT = new Font("Malgun Gothic", Font.BOLD, 10);
 }

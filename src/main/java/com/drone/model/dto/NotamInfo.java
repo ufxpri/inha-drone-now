@@ -1,5 +1,7 @@
 package com.drone.model.dto;
 
+import com.drone.model.NotamCategory;
+
 import java.time.LocalDateTime;
 import java.util.List;
 
@@ -22,6 +24,11 @@ public record NotamInfo(List<NotamItem> items) {
         /** 지도에 원으로 그릴 수 있는 기하정보가 모두 존재하는지. */
         public boolean hasGeometry() {
             return centerLat != null && centerLon != null && radiusNm != null;
+        }
+
+        /** 경보 종류 분류(필터·지도 라벨 공용). */
+        public NotamCategory category() {
+            return NotamCategory.classify(qcode, prohibited);
         }
     }
 }
